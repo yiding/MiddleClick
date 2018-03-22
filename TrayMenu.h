@@ -7,13 +7,12 @@
 #import <Foundation/Foundation.h>
 #import "Controller.h"
 
-
-@interface TrayMenu : NSObject <NSFileManagerDelegate> {
-@private
-	NSStatusItem *_statusItem;
-	Controller *myController;
-	NSMenuItem *tapItem;
-	NSMenuItem *clickItem;
+@interface TrayMenu : NSObject<NSFileManagerDelegate> {
+ @private
+  NSStatusItem *_statusItem;
+  Controller *myController;
+  NSMenuItem *tapItem;
+  NSMenuItem *clickItem;
 }
 - (id)initWithController:(Controller *)ctrl;
 - (void)setChecks;
