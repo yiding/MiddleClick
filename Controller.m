@@ -13,7 +13,6 @@
 #include <math.h>
 #include <unistd.h>
 #import "TrayMenu.h"
-#import "WakeObserver.h"
 
 #pragma mark Multitouch API
 
@@ -80,8 +79,7 @@ BOOL pressed;
     }
 
     // register a callback to know when osx come back from sleep
-    WakeObserver *wo = [[WakeObserver alloc] init];
-    [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:wo
+    [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self
                                                            selector:@selector(receiveWakeNote:)
                                                                name:NSWorkspaceDidWakeNotification
                                                              object:NULL];
@@ -91,6 +89,22 @@ BOOL pressed;
     [NSApp setDelegate:menu];
     [NSApp run];
   }
+}
+
+/// Callback for system wake up. This restarts the app to initialize callbacks.
+- (void)receiveWakeNote:(NSNotification *)note {
+  [NSThread sleepForTimeInterval:10.0];  // wait 10 sec before restarting to be
+  // sure everthing is up
+
+  NSString *relaunch =
+      [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"relaunch"];
+  int procid = [[NSProcessInfo processInfo] processIdentifier];
+  [NSTask launchedTaskWithLaunchPath:relaunch
+                           arguments:[NSArray
+                                         arrayWithObjects:[[NSBundle mainBundle] bundlePath],
+                                                          [NSString stringWithFormat:@"%d", procid],
+                                                          nil]];
+  [NSApp terminate:NULL];
 }
 
 - (BOOL)getClickMode {
