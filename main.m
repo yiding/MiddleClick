@@ -6,12 +6,19 @@
 //
 
 #import "Controller.h"
-
-Controller *con;
+#import "TrayMenu.h"
 
 int main(int argc, char *argv[]) {
-  con = [[Controller alloc] init];
+  NSApplication *app = [NSApplication sharedApplication];
+
+  Controller *con = [[Controller alloc] init];
   [con start];
+
+  // add traymenu
+  TrayMenu *menu = [[TrayMenu alloc] initWithController:con];
+  [app setDelegate:menu];
+
+  [app run];
 
   return EXIT_SUCCESS;
 }

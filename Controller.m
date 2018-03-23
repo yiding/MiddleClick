@@ -57,14 +57,14 @@ BOOL pressed;
 
 #pragma mark Implementation
 
-@implementation Controller
+@implementation Controller {
+  NSTimer *_restartTimer;
+}
 
 - (void)start {
   pressed = NO;
   needToClick = NO;
   @autoreleasepool {
-    [NSApplication sharedApplication];
-
     // Get list of all multi touch devices
     NSMutableArray *deviceList = (NSMutableArray *)MTDeviceCreateList();  // grab our device list
 
@@ -84,18 +84,55 @@ BOOL pressed;
                                                                name:NSWorkspaceDidWakeNotification
                                                              object:NULL];
 
-    // add traymenu
-    TrayMenu *menu = [[TrayMenu alloc] initWithController:self];
-    [NSApp setDelegate:menu];
-    [NSApp run];
+    // Register IOService notifications for added devices.
+    IONotificationPortRef port = IONotificationPortCreate(kIOMasterPortDefault);
+    CFRunLoopAddSource(CFRunLoopGetMain(), IONotificationPortGetRunLoopSource(port), kCFRunLoopDefaultMode);
+    io_iterator_t handle;
+    kern_return_t err = IOServiceAddMatchingNotification(
+        port, kIOFirstMatchNotification, IOServiceMatching("AppleMultitouchDevice"),
+        multitouchDeviceAddedCallback, self, &handle);
+    if (err) {
+      NSLog(
+          @"Failed to register notification for touchpad attach: %xd, will not handle newly "
+          @"attached devices",
+          err);
+      IONotificationPortDestroy(port);
+    } else {
+      /// Iterate through all the existing entries to arm the notification.
+      io_object_t item;
+      while ((item = IOIteratorNext(handle))) {
+        CFRelease(item);
+      }
+    }
   }
+}
+
+/// Schedule app to be restarted, if a restart is pending, delay it.
+- (void)scheduleRestart:(NSTimeInterval)delay {
+  [_restartTimer invalidate];  // Invalidate any existing timer.
+
+  _restartTimer = [NSTimer scheduledTimerWithTimeInterval:delay
+                                                  repeats:NO
+                                                    block:^(NSTimer *timer) {
+                                                      restartApp();
+                                                    }];
 }
 
 /// Callback for system wake up. This restarts the app to initialize callbacks.
 - (void)receiveWakeNote:(NSNotification *)note {
-  [NSThread sleepForTimeInterval:10.0];  // wait 10 sec before restarting to be
-  // sure everthing is up
+  [self scheduleRestart:10];
+}
 
+- (BOOL)getClickMode {
+  return needToClick;
+}
+
+- (void)setMode:(BOOL)click {
+  needToClick = click;
+}
+
+/// Relaunch the app when devices are connected/invalidated.
+static void restartApp() {
   NSString *relaunch =
       [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"relaunch"];
   int procid = [[NSProcessInfo processInfo] processIdentifier];
@@ -107,12 +144,17 @@ BOOL pressed;
   [NSApp terminate:NULL];
 }
 
-- (BOOL)getClickMode {
-  return needToClick;
-}
+/// Callback when a multitouch device is added.
+static void multitouchDeviceAddedCallback(void *_controller, io_iterator_t iterator) {
+  /// Loop through all the returned items.
+  io_object_t item;
+  while ((item = IOIteratorNext(iterator))) {
+    CFRelease(item);
+  }
 
-- (void)setMode:(BOOL)click {
-  needToClick = click;
+  NSLog(@"Multitouch device added, restarting...");
+  Controller *controller = (Controller *)_controller;
+  [controller scheduleRestart:2];
 }
 
 int callback(int device, Finger *data, int nFingers, double timestamp, int frame) {
